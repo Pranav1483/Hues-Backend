@@ -12,7 +12,7 @@ SECRET_KEY = env("SECRET_KEY")
 
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "*.vercel.app"]
+ALLOWED_HOSTS = ["*"]
 
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://hues-frontend-omega.vercel.app"]
 
