@@ -57,7 +57,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'huesbackend.wsgi.application'
+WSGI_APPLICATION = 'huesbackend.wsgi.app'
 
 DATABASES = {
     'default': {
