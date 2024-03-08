@@ -1,12 +1,13 @@
 from rest_framework.decorators import APIView, api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT, HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND, HTTP_409_CONFLICT
+from rest_framework.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT, HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND, HTTP_409_CONFLICT, HTTP_410_GONE, HTTP_500_INTERNAL_SERVER_ERROR
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTStatelessUserAuthentication, JWTAuthentication
 from django.contrib.auth.models import User
-from .models import Streak, Posts, Likes
+from django.core.mail import send_mail
+from .models import Streak, Posts, Likes, ResetLink
 from .serializers import UserSerializer, PostsSerializer
 import logging
 import requests
@@ -14,7 +15,7 @@ from hashlib import sha256
 from datetime import datetime, timedelta
 from django.conf import settings
 from pytz import timezone
-from rest_framework_simplejwt.views import TokenRefreshView
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -198,3 +199,58 @@ class LikeAPIView(APIView):
             return Response(status=HTTP_404_NOT_FOUND)
             
     
+class ResetAPIView(APIView):
+
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request: Request):
+        email = request.query_params.get('email')
+        if not email:
+            return Response(HTTP_400_BAD_REQUEST)
+        else:
+            current_time = datetime.now(timezone(settings.TIME_ZONE))
+            current_time_str = datetime.strftime(current_time, "%Y-%m-%d %H:%M:%S.%f%z")
+            try:
+                user = User.objects.get(username=sha256(email.encode()).hexdigest())
+                token = sha256(json.dumps({"user": user.username, "timestamp": current_time_str}).encode()).hexdigest()
+                resetLink = ResetLink(user=user, timestamp=current_time, token=token)
+                send_mail(
+                    "Reset Password",
+                    f"Follow this link to reset your password\n{settings.CLIENT_HOST}/reset?token={token}",
+                    "volship.app@gmail.com",
+                    [email]
+                )
+                resetLink.save()
+                logger.info(f"Password reset email sent to {user.username}")
+                return Response(status=HTTP_200_OK)
+            except User.DoesNotExist:
+                return Response(status=HTTP_404_NOT_FOUND)
+            except Exception as e:
+                logger.warn(e)
+                return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request: Request):
+        token = request.data.get('token')
+        new_password = request.data.get('new_password')
+        if not token or not new_password:
+            return Response(status=HTTP_400_BAD_REQUEST)
+        else:
+            try:
+                resetLink = ResetLink.objects.get(token=token)
+                if resetLink.timestamp + timedelta(seconds=10) < datetime.now(timezone(settings.TIME_ZONE)):
+                    resetLink.delete()
+                    return Response(status=HTTP_410_GONE)
+                else:
+                    user = resetLink.user
+                    user.set_password(new_password)
+                    user.save()
+                    resetLink.delete()
+                    logger.info(f"{user.username} changed Password")
+                    return Response(status=HTTP_200_OK)
+            except ResetLink.DoesNotExist:
+                return Response(status=HTTP_404_NOT_FOUND)
+            except Exception as e:
+                logger.warn(e)
+                return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            

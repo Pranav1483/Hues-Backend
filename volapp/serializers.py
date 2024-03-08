@@ -1,5 +1,5 @@
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
-from .models import Streak, Posts, Likes
+from .models import Streak, Posts, ResetLink
 
 class UserSerializer(ModelSerializer):
     username = SerializerMethodField()

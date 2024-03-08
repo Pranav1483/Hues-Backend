@@ -26,3 +26,8 @@ class Posts(models.Model):
 class Likes(models.Model):
     user = models.ForeignKey(to=User, on_delete=models.CASCADE)
     post = models.ForeignKey(to=Posts, on_delete=models.CASCADE)
+
+class ResetLink(models.Model):
+    user = models.ForeignKey(to=User, on_delete=models.CASCADE)
+    timestamp = models.DateTimeField()
+    token = models.CharField(max_length=150)
