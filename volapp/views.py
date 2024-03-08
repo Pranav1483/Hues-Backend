@@ -216,7 +216,7 @@ class ResetAPIView(APIView):
                 resetLink = ResetLink(user=user, timestamp=current_time, token=token)
                 send_mail(
                     "Reset Password",
-                    f"Follow this link to reset your password\n{settings.CLIENT_HOST}/reset?token={token}",
+                    f"Follow this link to reset your password\n{settings.CLIENT_HOST}/reset?token={token}\n\nLink expires in 10 minutes",
                     "volship.app@gmail.com",
                     [email]
                 )
@@ -237,7 +237,7 @@ class ResetAPIView(APIView):
         else:
             try:
                 resetLink = ResetLink.objects.get(token=token)
-                if resetLink.timestamp + timedelta(seconds=10) < datetime.now(timezone(settings.TIME_ZONE)):
+                if resetLink.timestamp + timedelta(minutes=10) < datetime.now(timezone(settings.TIME_ZONE)):
                     resetLink.delete()
                     return Response(status=HTTP_410_GONE)
                 else:
