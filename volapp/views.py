@@ -252,5 +252,22 @@ class ResetAPIView(APIView):
             except Exception as e:
                 logger.warn(e)
                 return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AnalyticsAPIView(APIView):
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request):
+        start, end = request.query_params.get('start'), request.query_params.get('end')
+        if not (start and end):
+            return Response(status=HTTP_400_BAD_REQUEST)
+        else:
+            start = datetime.strptime(start, "%y-%m-%d %H:%M:%S.%f%z")
+            end = datetime.strptime(end, "%y-%m-%d %H:%M:%S.%f%z")
+            postFilter = Posts.objects.filter(timestamp__lte=end, timestamp__gte=start)
+            posts = PostsSerializer(postFilter, many=True).data
+            return Response({'posts': posts}, status=HTTP_200_OK)
             
             
