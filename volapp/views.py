@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTStatelessUserAuthentication, JWTAuthentication
 from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
 from django.core.mail import send_mail
 from .models import Streak, Posts, Likes, ResetLink
 from .serializers import UserSerializer, PostsSerializer
@@ -24,6 +25,24 @@ logger = logging.getLogger(__name__)
 def status(request: Request):
     return Response(status=HTTP_200_OK)
 
+@api_view(['POST'])
+def signin(request: Request):
+    username, password = request.data.get('username'), request.data.get('password')
+    if not username or not password:
+        return Response(status=HTTP_400_BAD_REQUEST)
+    else:
+        username = sha256(username.encode()).hexdigest()
+        user = authenticate(request=request, username=username, password=password)
+        if user is not None:
+            token = RefreshToken.for_user(user)
+            logger.info(f"{user.username} logged in")
+            token_data = {
+                'access': str(token.access_token),
+                'refresh': str(token)
+            }
+            return Response(data=token_data, status=HTTP_200_OK)
+        else:
+            return Response(status=HTTP_401_UNAUTHORIZED)
 
 class UserAPIView(APIView):
 

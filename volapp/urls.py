@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import status, UserAPIView, PostAPIView, FeedAPIView, LikeAPIView, ResetAPIView, AnalyticsAPIView
+from .views import status, signin, UserAPIView, PostAPIView, FeedAPIView, LikeAPIView, ResetAPIView, AnalyticsAPIView
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
@@ -10,5 +10,6 @@ urlpatterns = [
     path("v1/feed", FeedAPIView.as_view(), name="feed_api"),
     path("v1/like", LikeAPIView.as_view(), name="like_api"),
     path("v1/reset", ResetAPIView.as_view(), name="reset_api"),
-    path("v2/analytics", AnalyticsAPIView.as_view(), name="analytics_api")
+    path("v2/analytics", AnalyticsAPIView.as_view(), name="analytics_api"),
+    path("v2/signin", signin, name="signin"),
 ]
