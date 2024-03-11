@@ -31,3 +31,7 @@ class ResetLink(models.Model):
     user = models.ForeignKey(to=User, on_delete=models.CASCADE)
     timestamp = models.DateTimeField()
     token = models.CharField(max_length=150)
+
+class Feedback(models.Model):
+    timestamp = models.DateTimeField(auto_now_add=True)
+    text = models.TextField()

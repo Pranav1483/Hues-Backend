@@ -2,6 +2,7 @@ from pathlib import Path
 from environ import Env
 import sys
 from datetime import timedelta
+import os
 
 env = Env()
 Env.read_env()
@@ -12,9 +13,11 @@ SECRET_KEY = env("SECRET_KEY")
 
 DEBUG = False
 
-ALLOWED_HOSTS = ["localhost", "hues-two.vercel.app"]
+APP_NAME = os.environ.get("FLY_APP_NAME")
 
-CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://hues-frontend-omega.vercel.app"]
+ALLOWED_HOSTS = ["localhost", "hues-two.vercel.app", "13.201.12.17"] + [f"{APP_NAME}.fly.dev"]
+
+CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://hues-frontend-omega.vercel.app", "http://13.201.12.17"]
 
 INSTALLED_APPS = [
     'volapp',
@@ -132,7 +135,7 @@ LOGGING = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(seconds=10),
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=10000)
 }
 

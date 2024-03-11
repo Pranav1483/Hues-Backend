@@ -8,7 +8,7 @@ from rest_framework_simplejwt.authentication import JWTStatelessUserAuthenticati
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.core.mail import send_mail
-from .models import Streak, Posts, Likes, ResetLink
+from .models import Streak, Posts, Likes, ResetLink, Feedback
 from .serializers import UserSerializer, PostsSerializer
 import logging
 import requests
@@ -43,6 +43,28 @@ def signin(request: Request):
             return Response(data=token_data, status=HTTP_200_OK)
         else:
             return Response(status=HTTP_401_UNAUTHORIZED)
+
+@api_view(['POST'])
+def signup(request: Request):
+    try:
+        username, password = request.data.get('username'), request.data.get('password')
+        if not username or not password:
+            return Response(status=HTTP_400_BAD_REQUEST)
+        else:
+            username = sha256(username.encode()).hexdigest()
+            if User.objects.filter(username=username).exists():
+                return Response(status=HTTP_409_CONFLICT)
+            else:
+                user = User(username=username)
+                user.set_password(password)
+                user.save()
+                streak = Streak(user=user)
+                streak.save()
+                logger.info(f"{user.username} created")
+                return Response(status=HTTP_200_OK)
+    except Exception as e:
+        logger.warn(e)
+        return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
 
 class UserAPIView(APIView):
 
@@ -289,4 +311,16 @@ class AnalyticsAPIView(APIView):
             posts = PostsSerializer(postFilter, many=True).data
             return Response({'posts': posts}, status=HTTP_200_OK)
             
-            
+
+class FeedbackAPIView(APIView):
+
+    authentication_classes = [JWTStatelessUserAuthentication]
+
+    def post(self, request: Request):
+        text = request.data.get('text')
+        if not text:
+            return Response(status=HTTP_400_BAD_REQUEST)
+        else:
+            feedback = Feedback(text=text)
+            feedback.save()
+            return Response(status=HTTP_200_OK)
