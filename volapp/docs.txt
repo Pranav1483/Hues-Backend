@@ -1,0 +1,198 @@
+BASE_URL = https://huesofchennai.fly.dev/api
+
+For 401 codes, maybe due to exiration of access code. In this case, see Endpoint for refreshing access token
+
+Refresh Access Token
+    - v1/reset
+    - POST
+    - data = {
+        refresh
+    }
+
+Signin: 
+    - /v1/user
+    - POST
+    - data = {
+        'email': Email Address
+    }
+    - response
+        - 200 (OK) : data = {
+            'access': Access Token,
+            'refresh': Refresh Token
+        }
+        - 201 (Created) : data = {
+            'access': Access Token,
+            'refresh': Refresh Token
+        }
+
+Get User Data:
+    - /v1/user
+    - GET
+    - headers
+        - Authorization = Bearer {Access Token}
+    - response
+        - 200 : data = {
+            username,
+            current_streak,
+            max_streak,
+            last_post_datetime
+        }
+        - 401 : Unauthorized
+
+Delete User Data:
+    - /v1/user
+    - DELETE
+    - headers
+        - Authorization = Bearer {Access Token}
+    - response
+        - 200 
+        - 401
+
+Upload Post
+    - /v1/post
+    - POST
+    - headers
+        - Authorization = Bearer {Access Token}
+    - data = {
+        url,
+        description,
+        emotions: [],
+        answers: []
+    }
+    - response 
+        - 201
+        - 401
+
+Get User Posts
+    - /v1/post
+    - GET
+    - headers
+        - Authorization = Bearer {Access Token}
+    - response 
+        - 200 : data = {
+            posts: [
+                {
+                    id,
+                    multimedia,
+                    description,
+                    username,
+                    timestamp,
+                    flagged,
+                    emotions: {
+                        emotions: []
+                    },
+                    answers: {
+                        answers: []
+                    },
+                    total_likes
+                }
+            ]
+        }
+        - 401
+
+Edit Post
+    - v1/post?postId={id}
+    - PUT
+    - headers
+        - Authorization = Bearer {Access Token}
+    - data = {
+        description,
+        emotions: [],
+        answers: []
+    } (Any combination of the 3 parameters, whichever is required to be changed)
+    - response
+        - 204
+        - 401
+        - 404 (Post with id not found)
+
+Delete Post
+    - v1/post?postId={id}
+    - DELETE
+    - headers
+        - Authorization = Bearer {Access Token}
+    - response
+        - 204
+        - 401
+        - 404 (No Post with id found)
+
+Latest Feed
+    - v1/feed
+    - GET
+    - headers
+        - Authorization = Bearer {Access Token}
+    - response
+        - 200 : data = {
+            posts: [
+                {
+                    id,
+                    multimedia,
+                    description,
+                    username,
+                    timestamp,
+                    flagged,
+                    emotions: {
+                        emotions: []
+                    },
+                    answers: {
+                        answers: []
+                    },
+                    total_likes
+                }
+            ]
+        }
+        - 401
+
+Next Feed
+    - v1/feed
+    - POST
+    - headers
+        - Authorization = Bearer {Access Token}
+    - data = {
+        postId (id of last post),
+        timestamp (timestamp of last post) eg: 2024-03-08T00:18:58.074576+05:30
+    }
+    - response
+        - 200 : data = {
+            posts: [
+                {
+                    id,
+                    multimedia,
+                    description,
+                    username,
+                    timestamp,
+                    flagged,
+                    emotions: {
+                        emotions: []
+                    },
+                    answers: {
+                        answers: []
+                    },
+                    total_likes
+                }
+            ]
+        }
+        - 400
+        - 401
+
+Like Post
+    - v1/like?postId={id}
+    - GET
+    - headers
+        - Authorization = Bearer {Access Token}
+    - response
+        - 200
+        - 401
+        - 404 (No Post)
+
+Feedback
+    - v2/feedback
+    - POST
+    - headers
+        - Authorization = Bearer {Access Token}
+    - data = {
+        text
+    }
+    - response 
+        - 200
+        - 400
+        - 401

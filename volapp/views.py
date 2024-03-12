@@ -307,8 +307,9 @@ class AnalyticsAPIView(APIView):
         else:
             start = datetime.strptime(start, "%y-%m-%d %H:%M:%S.%f%z")
             end = datetime.strptime(end, "%y-%m-%d %H:%M:%S.%f%z")
-            postFilter = Posts.objects.filter(timestamp__lte=end, timestamp__gte=start)
+            postFilter = Posts.objects.filter(timestamp__lte=end, timestamp__gte=start, posted_user=request.user)
             posts = PostsSerializer(postFilter, many=True).data
+            logger.info(f"{request.user.username} fetched Analytics")
             return Response({'posts': posts}, status=HTTP_200_OK)
             
 
@@ -324,3 +325,30 @@ class FeedbackAPIView(APIView):
             feedback = Feedback(text=text)
             feedback.save()
             return Response(status=HTTP_200_OK)
+        
+
+class SearchAPIView(APIView):
+
+    authentication_classes = [JWTStatelessUserAuthentication]
+
+    def get(self, request: Request):
+        query = request.query_params.get('query')
+        if not query:
+            return Response(status=HTTP_400_BAD_REQUEST)
+        else:
+            query = query.title()
+            postQuery = Posts.objects.filter(emotions__emotions__contains=query).order_by('timestamp')[:20][::-1]
+            posts = PostsSerializer(postQuery, many=True).data
+            return Response(data={'posts': posts}, status=HTTP_200_OK)
+    
+    def post(self, request: Request):
+        if request.data.get('postId') and request.data.get('timestamp') and request.data.get('query'):
+            postId, timestamp, query = request.data.get('postId'), datetime.strptime(request.data.get('timestamp'), '%Y-%m-%dT%H:%M:%S.%f%z'), request.data.get('query').title()
+            postsQuery = Posts.objects.filter(emotions__emotions__contains=query, timestamp__lte=timestamp, id__lt=postId)
+            postsQuery = postsQuery.order_by('-timestamp', 'id')[:20]
+            posts = PostsSerializer(postsQuery, many=True).data
+            return Response(data={'posts': posts}, status=HTTP_200_OK)
+        else:
+            return Response(status=HTTP_400_BAD_REQUEST)
+
+

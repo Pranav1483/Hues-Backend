@@ -19,6 +19,8 @@ ALLOWED_HOSTS = ["localhost", "hues-two.vercel.app", "13.201.12.17"] + [f"{APP_N
 
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://hues-frontend-omega.vercel.app", "http://13.201.12.17"]
 
+CSRF_TRUSTED_ORIGINS = ["https://*.fly.dev"]
+
 INSTALLED_APPS = [
     'volapp',
     'corsheaders',
@@ -60,7 +62,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'huesbackend.wsgi.app'
+WSGI_APPLICATION = 'huesbackend.wsgi.application'
 
 DATABASES = {
     'default': {
