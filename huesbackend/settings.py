@@ -2,7 +2,6 @@ from pathlib import Path
 from environ import Env
 import sys
 from datetime import timedelta
-import os
 
 env = Env()
 Env.read_env()
