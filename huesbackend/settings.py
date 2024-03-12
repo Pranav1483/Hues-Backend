@@ -13,9 +13,7 @@ SECRET_KEY = env("SECRET_KEY")
 
 DEBUG = False
 
-APP_NAME = os.environ.get("FLY_APP_NAME")
-
-ALLOWED_HOSTS = ["localhost", "hues-two.vercel.app", "13.201.12.17"] + [f"{APP_NAME}.fly.dev"]
+ALLOWED_HOSTS = ["localhost", "hues-two.vercel.app", "13.201.12.17", "azure"]
 
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://hues-frontend-omega.vercel.app", "http://13.201.12.17"]
 
