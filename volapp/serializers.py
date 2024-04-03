@@ -1,5 +1,6 @@
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
-from .models import Streak, Posts, ResetLink
+from .models import Streak, Posts
+from django.contrib.auth.models import User
 
 class UserSerializer(ModelSerializer):
     username = SerializerMethodField()
@@ -31,8 +32,20 @@ class PostsSerializer(ModelSerializer):
             'flagged',
             'emotions',
             'answers',
-            'total_likes'
+            'total_likes',
+            'display'
         )
     
     def get_username(self, obj):
         return obj.posted_user.username
+    
+
+class UserSerializerForAdminView(ModelSerializer):
+
+    class Meta:
+        model = User
+        fields = (
+            'username',
+            'is_staff',
+            'date_joined'
+        )

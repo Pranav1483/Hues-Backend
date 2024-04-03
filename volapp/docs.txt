@@ -1,4 +1,4 @@
-BASE_URL = https://huesofchennai.fly.dev/api
+BASE_URL = https://huesofchennai.azurewebsites.net/api
 
 For 401 codes, maybe due to exiration of access code. In this case, see Endpoint for refreshing access token
 
@@ -194,5 +194,95 @@ Feedback
     }
     - response 
         - 200
+        - 400
+        - 401
+
+Search
+    - v2/search?query={emotion}
+    - GET (Gives only latest 20 posts)
+    - headers
+        - Authorization = Bearer {Access Token}
+    - response
+        - 200 : data = {
+            posts: [
+                {
+                    id,
+                    multimedia,
+                    description,
+                    username,
+                    timestamp,
+                    flagged,
+                    emotions: {
+                        emotions: []
+                    },
+                    answers: {
+                        answers: []
+                    },
+                    total_likes
+                }
+            ]
+        }
+        - 400
+        - 401
+
+    - v2/search
+    - POST (gives subsequent set of 20 posts)
+    - headers
+        - Authorization = Bearer {Access Token}
+    - data = {
+        query (Any emotion)
+        postId (the last post ID encountered)
+        timestamp (the timestamp of last post encountered)
+    }
+    - response
+        - 200 : data = {
+            posts: [
+                {
+                    id,
+                    multimedia,
+                    description,
+                    username,
+                    timestamp,
+                    flagged,
+                    emotions: {
+                        emotions: []
+                    },
+                    answers: {
+                        answers: []
+                    },
+                    total_likes
+                }
+            ]
+        }
+        - 400
+        - 401
+
+
+Analytics 
+    - v2/analytics?start={datetime}&end={datetime}
+    - datetime in this format - "%y-%m-%dT%H:%M:%S.%f%z" (eg: 2024-03-12T04:14:20.007962+05:30)
+    - GET
+    - headers
+        - Authorization = Bearer {Access Token}
+    - response
+        - 200 : data = {
+            posts: [
+                {
+                    id,
+                    multimedia,
+                    description,
+                    username,
+                    timestamp,
+                    flagged,
+                    emotions: {
+                        emotions: []
+                    },
+                    answers: {
+                        answers: []
+                    },
+                    total_likes
+                }
+            ]
+        }
         - 400
         - 401

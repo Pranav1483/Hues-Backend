@@ -22,15 +22,11 @@ class Posts(models.Model):
     emotions = models.JSONField(default=default_emotions)
     answers = models.JSONField(default=default_answers)
     total_likes = models.PositiveBigIntegerField(default=0)
+    display = models.BooleanField(default=False)
 
 class Likes(models.Model):
     user = models.ForeignKey(to=User, on_delete=models.CASCADE)
     post = models.ForeignKey(to=Posts, on_delete=models.CASCADE)
-
-class ResetLink(models.Model):
-    user = models.ForeignKey(to=User, on_delete=models.CASCADE)
-    timestamp = models.DateTimeField()
-    token = models.CharField(max_length=150)
 
 class Feedback(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)

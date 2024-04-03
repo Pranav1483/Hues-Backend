@@ -12,11 +12,9 @@ SECRET_KEY = env("SECRET_KEY")
 
 DEBUG = False
 
-ALLOWED_HOSTS = ["localhost", "hues-two.vercel.app", "13.201.12.17", "huesofchennai.azurewebsites.net"]
+ALLOWED_HOSTS = ["huesofchennai.azurewebsites.net", "localhost"]
 
-CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://hues-frontend-omega.vercel.app", "http://13.201.12.17"]
-
-CSRF_TRUSTED_ORIGINS = ["https://*.fly.dev"]
+CORS_ALLOWED_ORIGINS = ["https://localhost:3000", "https://hues-frontend-omega.vercel.app", "https://huesofchennai.vercel.app", "https://hues-admin.vercel.app"]
 
 INSTALLED_APPS = [
     'volapp',
@@ -137,11 +135,3 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=10000)
 }
-
-EMAIL_HOST = env("EMAIL_HOST")
-EMAIL_PORT = env("EMAIL_PORT")
-EMAIL_HOST_USER = env("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
-EMAIL_USE_TLS = True
-
-CLIENT_HOST = env("CLIENT_HOST")

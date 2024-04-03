@@ -1,22 +1,22 @@
 from rest_framework.decorators import APIView, api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT, HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND, HTTP_409_CONFLICT, HTTP_410_GONE, HTTP_500_INTERNAL_SERVER_ERROR
+from rest_framework.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT, HTTP_302_FOUND, HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND, HTTP_409_CONFLICT, HTTP_410_GONE, HTTP_500_INTERNAL_SERVER_ERROR
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTStatelessUserAuthentication, JWTAuthentication
-from django.contrib.auth.models import User
+from .permissions import IsAdmin
 from django.contrib.auth import authenticate
-from django.core.mail import send_mail
-from .models import Streak, Posts, Likes, ResetLink, Feedback
-from .serializers import UserSerializer, PostsSerializer
+from django.contrib.auth.models import User
+from django.db.models import Q
+from .models import Streak, Posts, Likes, Feedback
+from .serializers import UserSerializer, PostsSerializer, UserSerializerForAdminView
 import logging
 import requests
 from hashlib import sha256
 from datetime import datetime, timedelta
 from django.conf import settings
 from pytz import timezone
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +26,43 @@ def status(request: Request):
     return Response(status=HTTP_200_OK)
 
 @api_view(['POST'])
-def signin(request: Request):
-    username, password = request.data.get('username'), request.data.get('password')
-    if not username or not password:
+def signup(request: Request):
+    try:
+        username, email = request.data.get('username'), request.data.get('email')
+        if not username or not email:
+            return Response(status=HTTP_400_BAD_REQUEST)
+        else:
+            email = sha256(email.encode()).hexdigest()
+            if User.objects.filter(username=username).exists():
+                return Response(data={"message": "Username already exists"}, status=HTTP_409_CONFLICT)
+            elif User.objects.filter(email=email):
+                return Response(data={"message": "Email already exists"}, status=HTTP_409_CONFLICT)
+            else:
+                user = User(username=username, email=email)
+                user.set_password(sha256((username + email).encode()).hexdigest())
+                user.save()
+                user.set_password
+                streak = Streak(user=user)
+                streak.save()
+                logger.info(f"{user.username} created")
+                return Response(status=HTTP_201_CREATED)
+    except Exception as e:
+        logger.warn(e)
+        return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+@api_view(['POST'])
+def admin_login(request: Request):
+    if not request.data.get("username") or not request.data.get("password"):
         return Response(status=HTTP_400_BAD_REQUEST)
     else:
-        username = sha256(username.encode()).hexdigest()
+        username, password = request.data.get("username"), request.data.get("password")
         user = authenticate(request=request, username=username, password=password)
-        if user is not None:
+        if not user:
+            return Response(status=HTTP_401_UNAUTHORIZED)
+        elif not user.is_staff:
+            return Response(status=HTTP_403_FORBIDDEN)
+        else:
             token = RefreshToken.for_user(user)
             logger.info(f"{user.username} logged in")
             token_data = {
@@ -41,37 +70,17 @@ def signin(request: Request):
                 'refresh': str(token)
             }
             return Response(data=token_data, status=HTTP_200_OK)
-        else:
-            return Response(status=HTTP_401_UNAUTHORIZED)
-
-@api_view(['POST'])
-def signup(request: Request):
-    try:
-        username, password = request.data.get('username'), request.data.get('password')
-        if not username or not password:
-            return Response(status=HTTP_400_BAD_REQUEST)
-        else:
-            username = sha256(username.encode()).hexdigest()
-            if User.objects.filter(username=username).exists():
-                return Response(status=HTTP_409_CONFLICT)
-            else:
-                user = User(username=username)
-                user.set_password(password)
-                user.save()
-                streak = Streak(user=user)
-                streak.save()
-                logger.info(f"{user.username} created")
-                return Response(status=HTTP_200_OK)
-    except Exception as e:
-        logger.warn(e)
-        return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
 
 class UserAPIView(APIView):
 
     authentication_classes = [JWTAuthentication]
 
     def get(self, request: Request):
-        streak = UserSerializer(Streak.objects.get(user=request.user)).data
+        streak = Streak.objects.get(user=request.user)
+        if streak.last_post_datetime and streak.last_post_datetime.date() + timedelta(days=1) < datetime.now(timezone(settings.TIME_ZONE)).date():
+            streak.current_streak = 0
+            streak.save()
+        streak = UserSerializer(streak).data
         logger.info(f"{request.user.username} at Homepage")
         return Response(streak, status=HTTP_200_OK)
 
@@ -91,24 +100,19 @@ class UserAPIView(APIView):
         else:
             logger.warn(f"Invalid Data during Signup\n\tGiven Data: {request.data.get('email')}")
             return Response(status=HTTP_409_CONFLICT)
-        hash_email = sha256(email.encode()).hexdigest()
-        user, created = User.objects.get_or_create(username=hash_email)
-        if created:
-            user.set_password(email[::-1])
-            user.save()
-            streak = Streak(user=user)
-            streak.save()
-            logger.info(f"{user.username} created")
-        token = RefreshToken.for_user(user)
-        logger.info(f"{user.username} logged in")
-        token_data = {
-            'access': str(token.access_token),
-            'refresh': str(token)
-        }
-        if created:
-            return Response(data=token_data, status=HTTP_201_CREATED)
-        else:
+        email = sha256(email.encode()).hexdigest()
+        userFilter = User.objects.filter(email=email)
+        if userFilter.exists():
+            user = userFilter.get()
+            token = RefreshToken.for_user(user)
+            logger.info(f"{user.username} logged in")
+            token_data = {
+                'access': str(token.access_token),
+                'refresh': str(token)
+            }
             return Response(data=token_data, status=HTTP_200_OK)
+        else:
+            return Response(status=HTTP_302_FOUND)
     
     def delete(self, request: Request):
         username = request.user.username
@@ -133,8 +137,8 @@ class PostAPIView(APIView):
                 logger.warn(f"Post {postId} not found by {request.user.username}")
                 return Response(status=HTTP_404_NOT_FOUND)
         else:
-            postQuery = Posts.objects.filter(posted_user=request.user).order_by('timestamp')
-            posts = PostsSerializer(postQuery, many=True).data[::-1]
+            postQuery = Posts.objects.filter(posted_user=request.user).order_by('-timestamp')
+            posts = PostsSerializer(postQuery, many=True).data
             logger.info(f"{request.user.username} fetched all Posts")
             return Response(data={'posts': posts}, status=HTTP_200_OK)
     
@@ -147,13 +151,14 @@ class PostAPIView(APIView):
         description = request.data.get('description', '')
         emotions = {'emotions': request.data.get('emotions', [])}
         answers = {'answers': request.data.get('answers', [])}
+        display = request.data.get('display', False)
         if not multimedia:
-            return Response(status=HTTP_409_CONFLICT)
-        post = Posts(multimedia=multimedia, description=description, posted_user=request.user, emotions=emotions, answers=answers)
+            return Response(status=HTTP_400_BAD_REQUEST)
+        post = Posts(multimedia=multimedia, description=description, posted_user=request.user, emotions=emotions, answers=answers, display=display)
         try:
             post.save()
         except Exception as e:
-            return Response(data=str(e), status=HTTP_400_BAD_REQUEST)
+            return Response(data=str(e), status=HTTP_500_INTERNAL_SERVER_ERROR)
         if not streak.last_post_datetime or streak.last_post_datetime.date() != current_date:
             streak.current_streak += 1
             streak.max_streak = max(streak.current_streak, streak.max_streak)
@@ -175,6 +180,8 @@ class PostAPIView(APIView):
                 post.emotions = {"emotions": request.data.get('emotions')}
             if request.data.get('answers'):
                 post.answers = {"answers": request.data.get('answers')}
+            if request.data.get('display'):
+                post.display = request.data.get('display')
             post.save()
             logger.info(f"{request.user.username} updated Post {postId}")
             return Response(status=HTTP_204_NO_CONTENT)
@@ -202,19 +209,26 @@ class FeedAPIView(APIView):
     authentication_classes = [JWTStatelessUserAuthentication]
 
     def get(self, request: Request):
-        postQuery = Posts.objects.all().order_by('timestamp')[:20][::-1]
+        postQuery = Posts.objects.filter(display=True, flagged=False).order_by('-timestamp', '-id')[:20]
         posts = PostsSerializer(postQuery, many=True).data
+        logger.info("Posts Fetched")
         return Response(data={'posts': posts}, status=HTTP_200_OK)
         
 
     def post(self, request: Request):
         if request.data.get('postId') and request.data.get('timestamp'):
             postId, timestamp = request.data.get('postId'), datetime.strptime(request.data.get('timestamp'), '%Y-%m-%dT%H:%M:%S.%f%z')
-            postsQuery = Posts.objects.filter(timestamp__lte=timestamp, id__lt=postId)
-            postsQuery = postsQuery.order_by('-timestamp', 'id')[:20]
+            postsQuery = Posts.objects.filter(
+                                                Q(timestamp__lt=timestamp) | (Q(timestamp=timestamp) & Q(id__lt=postId)),
+                                                display=True,
+                                                flagged=False
+                                            )
+            postsQuery = postsQuery.order_by('-timestamp', '-id')[:20]
             posts = PostsSerializer(postsQuery, many=True).data
+            logger.info("Posts Fetched")
             return Response(data={'posts': posts}, status=HTTP_200_OK)
         else:
+            logger.warn("Error Fetching more Posts")
             return Response(status=HTTP_400_BAD_REQUEST)
         
 
@@ -239,61 +253,6 @@ class LikeAPIView(APIView):
         else:
             return Response(status=HTTP_404_NOT_FOUND)
             
-    
-class ResetAPIView(APIView):
-
-    authentication_classes = [JWTAuthentication]
-
-    def get(self, request: Request):
-        email = request.query_params.get('email')
-        if not email:
-            return Response(HTTP_400_BAD_REQUEST)
-        else:
-            current_time = datetime.now(timezone(settings.TIME_ZONE))
-            current_time_str = datetime.strftime(current_time, "%Y-%m-%d %H:%M:%S.%f%z")
-            try:
-                user = User.objects.get(username=sha256(email.encode()).hexdigest())
-                token = sha256(json.dumps({"user": user.username, "timestamp": current_time_str}).encode()).hexdigest()
-                resetLink = ResetLink(user=user, timestamp=current_time, token=token)
-                send_mail(
-                    "Reset Password",
-                    f"Follow this link to reset your password\n{settings.CLIENT_HOST}/reset?token={token}\n\nLink expires in 10 minutes",
-                    "volship.app@gmail.com",
-                    [email]
-                )
-                resetLink.save()
-                logger.info(f"Password reset email sent to {user.username}")
-                return Response(status=HTTP_200_OK)
-            except User.DoesNotExist:
-                return Response(status=HTTP_404_NOT_FOUND)
-            except Exception as e:
-                logger.warn(e)
-                return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def post(self, request: Request):
-        token = request.data.get('token')
-        new_password = request.data.get('new_password')
-        if not token or not new_password:
-            return Response(status=HTTP_400_BAD_REQUEST)
-        else:
-            try:
-                resetLink = ResetLink.objects.get(token=token)
-                if resetLink.timestamp + timedelta(minutes=10) < datetime.now(timezone(settings.TIME_ZONE)):
-                    resetLink.delete()
-                    return Response(status=HTTP_410_GONE)
-                else:
-                    user = resetLink.user
-                    user.set_password(new_password)
-                    user.save()
-                    resetLink.delete()
-                    logger.info(f"{user.username} changed Password")
-                    return Response(status=HTTP_200_OK)
-            except ResetLink.DoesNotExist:
-                return Response(status=HTTP_404_NOT_FOUND)
-            except Exception as e:
-                logger.warn(e)
-                return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class AnalyticsAPIView(APIView):
 
@@ -305,8 +264,8 @@ class AnalyticsAPIView(APIView):
         if not (start and end):
             return Response(status=HTTP_400_BAD_REQUEST)
         else:
-            start = datetime.strptime(start, "%y-%m-%d %H:%M:%S.%f%z")
-            end = datetime.strptime(end, "%y-%m-%d %H:%M:%S.%f%z")
+            start = datetime.strptime(start, "%y-%m-%dT%H:%M:%S.%f%z")
+            end = datetime.strptime(end, "%y-%m-%dT%H:%M:%S.%f%z")
             postFilter = Posts.objects.filter(timestamp__lte=end, timestamp__gte=start, posted_user=request.user)
             posts = PostsSerializer(postFilter, many=True).data
             logger.info(f"{request.user.username} fetched Analytics")
@@ -337,18 +296,86 @@ class SearchAPIView(APIView):
             return Response(status=HTTP_400_BAD_REQUEST)
         else:
             query = query.title()
-            postQuery = Posts.objects.filter(emotions__emotions__contains=query).order_by('timestamp')[:20][::-1]
+            postQuery = Posts.objects.filter(emotions__emotions__contains=query, display=True, flagged=False).order_by('-timestamp', '-id')[:20]
             posts = PostsSerializer(postQuery, many=True).data
             return Response(data={'posts': posts}, status=HTTP_200_OK)
     
     def post(self, request: Request):
         if request.data.get('postId') and request.data.get('timestamp') and request.data.get('query'):
             postId, timestamp, query = request.data.get('postId'), datetime.strptime(request.data.get('timestamp'), '%Y-%m-%dT%H:%M:%S.%f%z'), request.data.get('query').title()
-            postsQuery = Posts.objects.filter(emotions__emotions__contains=query, timestamp__lte=timestamp, id__lt=postId)
-            postsQuery = postsQuery.order_by('-timestamp', 'id')[:20]
+            postsQuery = Posts.objects.filter(Q(timestamp__lt=timestamp) | (Q(timestamp=timestamp) & Q(id__lt=postId)),
+                                              emotions__emotions__contains=query, 
+                                              display=True,
+                                              flagged=False
+                                            )
+            postsQuery = postsQuery.order_by('-timestamp', '-id')[:20]
             posts = PostsSerializer(postsQuery, many=True).data
             return Response(data={'posts': posts}, status=HTTP_200_OK)
         else:
             return Response(status=HTTP_400_BAD_REQUEST)
 
+
+class UserListAPIView(APIView):
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request: Request):
+        userQuery = User.objects.all().order_by('-date_joined', '-username')[:20]
+        users = UserSerializerForAdminView(userQuery, many=True).data
+        logger.info("Admin Fetched Users")
+        return Response({'users': users}, status=HTTP_200_OK)
+    
+    def post(self, request: Request):
+        if not request.data.get('date_joined') or not request.data.get('username'):
+            return Response(status=HTTP_400_BAD_REQUEST)
+        else:
+            date_joined, username = datetime.strptime(request.data.get('date_joined'), '%Y-%m-%dT%H:%M:%S.%f%z'), request.data.get('username')
+            userQuery = User.objects.filter(
+                Q(date_joined__lt=date_joined) | (Q(date_joined=date_joined) & Q(username__lt=username))
+            )
+            userQuery = userQuery.order_by('-date_joined', '-username')[:20]
+            users = UserSerializerForAdminView(userQuery, many=True).data
+            logger.info("Admin Fetched More Users")
+            return Response({'users': users}, status=HTTP_200_OK)
+        
+
+class PostListAPIView(APIView):
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request: Request):
+        postQuery = Posts.objects.all().order_by('-timestamp', '-id')[:20]
+        posts = PostsSerializer(postQuery, many=True).data
+        logger.info("Admin Fetched Posts")
+        return Response({"posts": posts}, status=HTTP_200_OK)
+    
+    def post(self, request: Request):
+        timestamp, id = request.data.get('timestamp'), request.data.get('id')
+        if not timestamp or not id:
+            return Response(status=HTTP_400_BAD_REQUEST)
+        timestamp = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f%z')
+        postQuery = Posts.objects.filter(
+            Q(timestamp__lt=timestamp) | (Q(timestamp=timestamp) & Q(id__lt=id))
+        )
+        postQuery = postQuery.order_by('-timestamp', '-id')[:20]
+        posts = PostsSerializer(postQuery, many=True).data
+        logger.info("Admin fetched more Posts")
+        return Response({"posts": posts}, status=HTTP_200_OK)
+
+    def patch(self, request: Request):
+        id = request.query_params.get('id')
+        if not id:
+            return Response(status=HTTP_400_BAD_REQUEST)
+        else:
+            postFilter = Posts.objects.filter(id=id)
+            if postFilter.exists():
+                post = postFilter.get()
+                post.flagged = not post.flagged
+                post.save()
+                logger.info(f"Post {id} {'flagged' if post.flagged else 'un-flagged'}")
+                return Response(status=HTTP_204_NO_CONTENT)
+            else:
+                return Response(status=HTTP_404_NOT_FOUND)    
 
