@@ -14,7 +14,7 @@ DEBUG = False
 
 ALLOWED_HOSTS = ["huesofchennai.azurewebsites.net", "localhost"]
 
-CORS_ALLOWED_ORIGINS = ["https://localhost:3000", "https://hues-frontend-omega.vercel.app", "https://huesofchennai.vercel.app", "https://hues-admin.vercel.app"]
+CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://hues-frontend-omega.vercel.app", "https://huesofchennai.vercel.app", "https://hues-admin.vercel.app"]
 
 INSTALLED_APPS = [
     'volapp',

@@ -1,6 +1,10 @@
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
-from .models import Streak, Posts
+from rest_framework.request import Request
+from .models import Streak, Posts, Likes
 from django.contrib.auth.models import User
+import logging
+
+logger = logging.getLogger(__name__)
 
 class UserSerializer(ModelSerializer):
     username = SerializerMethodField()
@@ -14,12 +18,13 @@ class UserSerializer(ModelSerializer):
             'last_post_datetime'
         )
     
-    def get_username(self, obj):
+    def get_username(self, obj: Streak):
         return obj.user.username
     
 
 class PostsSerializer(ModelSerializer):
     username = SerializerMethodField()
+    emoji = SerializerMethodField()
 
     class Meta:
         model = Posts
@@ -32,13 +37,22 @@ class PostsSerializer(ModelSerializer):
             'flagged',
             'emotions',
             'answers',
-            'total_likes',
-            'display'
+            'display',
+            'reactions',
+            'emoji'
         )
     
-    def get_username(self, obj):
+    def get_username(self, obj: Posts):
         return obj.posted_user.username
     
+    def get_emoji(self, obj: Posts):
+        request: Request = self.context.get('request')
+        user: User = request.user
+        like_filter = Likes.objects.filter(user=user, post=obj)
+        if like_filter.exists():
+            return like_filter.get().emoji   
+        else:
+            return "" 
 
 class UserSerializerForAdminView(ModelSerializer):
 

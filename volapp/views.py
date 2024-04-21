@@ -20,6 +20,15 @@ from pytz import timezone
 
 logger = logging.getLogger(__name__)
 
+emojis = {
+    "1F604",
+    "1F60D",
+    "1F929",
+    "1F970",
+    "1F44F",
+    "1F9E1"
+}
+
 
 @api_view(['GET'])
 def status(request: Request):
@@ -127,20 +136,24 @@ class PostAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request):
-        postId = request.query_params.get('postId')
-        if postId:
-            postFilter = Posts.objects.filter(posted_user=request.user, id=postId)
-            if postFilter.exists():
-                logger.info(f"{request.user.username} fetched Post {postId}")
-                return Response(data=PostsSerializer(postFilter.first()).data, status=HTTP_200_OK)
+        try:
+            postId = request.query_params.get('postId')
+            if postId:
+                postFilter = Posts.objects.filter(posted_user=request.user, id=postId)
+                if postFilter.exists():
+                    logger.info(f"{request.user.username} fetched Post {postId}")
+                    return Response(data=PostsSerializer(postFilter.first(), context={"request": request}).data, status=HTTP_200_OK)
+                else:
+                    logger.warn(f"Post {postId} not found by {request.user.username}")
+                    return Response(status=HTTP_404_NOT_FOUND)
             else:
-                logger.warn(f"Post {postId} not found by {request.user.username}")
-                return Response(status=HTTP_404_NOT_FOUND)
-        else:
-            postQuery = Posts.objects.filter(posted_user=request.user).order_by('-timestamp')
-            posts = PostsSerializer(postQuery, many=True).data
-            logger.info(f"{request.user.username} fetched all Posts")
-            return Response(data={'posts': posts}, status=HTTP_200_OK)
+                postQuery = Posts.objects.filter(posted_user=request.user).order_by('-timestamp')
+                posts = PostsSerializer(postQuery, context={"request": request}, many=True).data
+                logger.info(f"{request.user.username} fetched all Posts")
+                return Response(data={'posts': posts}, status=HTTP_200_OK)
+        except Exception as e:
+            logger.critical(e)
+            return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
     
     def post(self, request: Request):
         streak = Streak.objects.get(user=request.user)
@@ -210,7 +223,7 @@ class FeedAPIView(APIView):
 
     def get(self, request: Request):
         postQuery = Posts.objects.filter(display=True, flagged=False).order_by('-timestamp', '-id')[:20]
-        posts = PostsSerializer(postQuery, many=True).data
+        posts = PostsSerializer(postQuery, context={"request": request}, many=True).data
         logger.info("Posts Fetched")
         return Response(data={'posts': posts}, status=HTTP_200_OK)
         
@@ -224,7 +237,7 @@ class FeedAPIView(APIView):
                                                 flagged=False
                                             )
             postsQuery = postsQuery.order_by('-timestamp', '-id')[:20]
-            posts = PostsSerializer(postsQuery, many=True).data
+            posts = PostsSerializer(postsQuery, context={"request": request}, many=True).data
             logger.info("Posts Fetched")
             return Response(data={'posts': posts}, status=HTTP_200_OK)
         else:
@@ -237,21 +250,35 @@ class LikeAPIView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
-    def get(self, request: Request):
-        if request.query_params.get('postId'):
-            try:
-                post = Posts.objects.get(id=request.query_params.get('postId'))
-                like_data = Likes.objects.get_or_create(user=request.user, post=post)
-                if like_data[1]:
-                    post.total_likes += 1
+    def post(self, request: Request):
+        postId, emoji = request.data.get("post"), request.data.get("emoji")
+        if emoji not in emojis:
+            return Response(status=HTTP_400_BAD_REQUEST)
+        user: User = request.user
+        if postId and emoji:
+            post_filter = Posts.objects.filter(id=postId)
+            if post_filter.exists():
+                post = post_filter.get()
+                likes_filter = Likes.objects.filter(user=user, post=post)
+                if likes_filter.exists():
+                    like = likes_filter.get()
+                    post.reactions[like.emoji] -= 1
+                    like.emoji = emoji
+                    post.reactions[emoji] = post.reactions.get(emoji, 0) + 1
+                    like.save()
                     post.save()
-                    logger.info(f"{request.user.username} liked Post {post.id}")
-                return Response(status=HTTP_200_OK)
-            except Posts.DoesNotExist:
-                logger.warn(f"Post {request.query_params.get('postId')} not found by {request.user.username}")
+                    return Response(status=HTTP_204_NO_CONTENT)
+                else:
+                    like = Likes(user=user, post=post, emoji=emoji)
+                    post.reactions[emoji] = post.reactions.get(emoji, 0) + 1
+                    post.save()
+                    like.save()
+                    return Response(status=HTTP_204_NO_CONTENT)
+            else:
                 return Response(status=HTTP_404_NOT_FOUND)
         else:
-            return Response(status=HTTP_404_NOT_FOUND)
+            return Response(status=HTTP_400_BAD_REQUEST)
+
             
 
 class AnalyticsAPIView(APIView):
@@ -267,7 +294,7 @@ class AnalyticsAPIView(APIView):
             start = datetime.strptime(start, "%y-%m-%dT%H:%M:%S.%f%z")
             end = datetime.strptime(end, "%y-%m-%dT%H:%M:%S.%f%z")
             postFilter = Posts.objects.filter(timestamp__lte=end, timestamp__gte=start, posted_user=request.user)
-            posts = PostsSerializer(postFilter, many=True).data
+            posts = PostsSerializer(postFilter, context={"request": request}, many=True).data
             logger.info(f"{request.user.username} fetched Analytics")
             return Response({'posts': posts}, status=HTTP_200_OK)
             
@@ -297,7 +324,7 @@ class SearchAPIView(APIView):
         else:
             query = query.title()
             postQuery = Posts.objects.filter(emotions__emotions__contains=query, display=True, flagged=False).order_by('-timestamp', '-id')[:20]
-            posts = PostsSerializer(postQuery, many=True).data
+            posts = PostsSerializer(postQuery, context={"request": request}, many=True).data
             return Response(data={'posts': posts}, status=HTTP_200_OK)
     
     def post(self, request: Request):
@@ -309,7 +336,7 @@ class SearchAPIView(APIView):
                                               flagged=False
                                             )
             postsQuery = postsQuery.order_by('-timestamp', '-id')[:20]
-            posts = PostsSerializer(postsQuery, many=True).data
+            posts = PostsSerializer(postsQuery, context={"request": request}, many=True).data
             return Response(data={'posts': posts}, status=HTTP_200_OK)
         else:
             return Response(status=HTTP_400_BAD_REQUEST)
@@ -347,7 +374,7 @@ class PostListAPIView(APIView):
 
     def get(self, request: Request):
         postQuery = Posts.objects.all().order_by('-timestamp', '-id')[:20]
-        posts = PostsSerializer(postQuery, many=True).data
+        posts = PostsSerializer(postQuery, context={"request": request}, many=True).data
         logger.info("Admin Fetched Posts")
         return Response({"posts": posts}, status=HTTP_200_OK)
     
@@ -360,7 +387,7 @@ class PostListAPIView(APIView):
             Q(timestamp__lt=timestamp) | (Q(timestamp=timestamp) & Q(id__lt=id))
         )
         postQuery = postQuery.order_by('-timestamp', '-id')[:20]
-        posts = PostsSerializer(postQuery, many=True).data
+        posts = PostsSerializer(postQuery, context={"request": request}, many=True).data
         logger.info("Admin fetched more Posts")
         return Response({"posts": posts}, status=HTTP_200_OK)
 
@@ -379,3 +406,16 @@ class PostListAPIView(APIView):
             else:
                 return Response(status=HTTP_404_NOT_FOUND)    
 
+
+class ShareImageAPIView(APIView):
+
+    def get(self, request: Request):
+        post_id = request.query_params.get('id')
+        if not post_id:
+            return Response(status=HTTP_400_BAD_REQUEST)
+        postFilter = Posts.objects.filter(id=post_id, display=True)
+        if postFilter.exists():
+            return Response(PostsSerializer(postFilter.get(), context={"request": request}).data, status=HTTP_200_OK)
+        else:
+            return Response(status=HTTP_404_NOT_FOUND)
+        
