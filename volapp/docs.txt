@@ -84,7 +84,8 @@ Get User Posts
                     answers: {
                         answers: []
                     },
-                    total_likes
+                    reactions,
+                    emoji
                 }
             ]
         }
@@ -136,7 +137,8 @@ Latest Feed
                     answers: {
                         answers: []
                     },
-                    total_likes
+                    reactions,
+                    emoji
                 }
             ]
         }
@@ -167,7 +169,8 @@ Next Feed
                     answers: {
                         answers: []
                     },
-                    total_likes
+                    reactions,
+                    emoji
                 }
             ]
         }
@@ -175,10 +178,21 @@ Next Feed
         - 401
 
 Like Post
-    - v1/like?postId={id}
-    - GET
+    - v1/like
+    - POST
     - headers
         - Authorization = Bearer {Access Token}
+    - data = {
+        post: POST ID,
+        emoji: One among {
+                            "1F604",
+                            "1F60D",
+                            "1F929",
+                            "1F970",
+                            "1F44F",
+                            "1F9E1"
+                        }
+    }
     - response
         - 200
         - 401
@@ -218,7 +232,8 @@ Search
                     answers: {
                         answers: []
                     },
-                    total_likes
+                    reactions,
+                    emoji
                 }
             ]
         }
@@ -250,7 +265,8 @@ Search
                     answers: {
                         answers: []
                     },
-                    total_likes
+                    reactions,
+                    emoji
                 }
             ]
         }
@@ -280,7 +296,8 @@ Analytics
                     answers: {
                         answers: []
                     },
-                    total_likes
+                    reactions,
+                    emoji
                 }
             ]
         }
