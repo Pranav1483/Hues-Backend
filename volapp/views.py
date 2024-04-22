@@ -219,7 +219,8 @@ class PostAPIView(APIView):
 
 class FeedAPIView(APIView):
 
-    authentication_classes = [JWTStatelessUserAuthentication]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request: Request):
         postQuery = Posts.objects.filter(display=True, flagged=False).order_by('-timestamp', '-id')[:20]
@@ -262,11 +263,17 @@ class LikeAPIView(APIView):
                 likes_filter = Likes.objects.filter(user=user, post=post)
                 if likes_filter.exists():
                     like = likes_filter.get()
-                    post.reactions[like.emoji] -= 1
-                    like.emoji = emoji
-                    post.reactions[emoji] = post.reactions.get(emoji, 0) + 1
-                    like.save()
-                    post.save()
+                    if emoji == like.emoji:
+                        post.reactions[like.emoji] -= 1
+                        like.emoji = ""
+                        like.save()
+                        post.save()
+                    else:
+                        post.reactions[like.emoji] -= 1
+                        like.emoji = emoji
+                        post.reactions[emoji] = post.reactions.get(emoji, 0) + 1
+                        like.save()
+                        post.save()
                     return Response(status=HTTP_204_NO_CONTENT)
                 else:
                     like = Likes(user=user, post=post, emoji=emoji)
