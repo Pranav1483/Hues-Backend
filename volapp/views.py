@@ -294,16 +294,22 @@ class AnalyticsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request):
-        start, end = request.query_params.get('start'), request.query_params.get('end')
-        if not (start and end):
-            return Response(status=HTTP_400_BAD_REQUEST)
-        else:
-            start = datetime.strptime(start, "%y-%m-%dT%H:%M:%S.%f%z")
-            end = datetime.strptime(end, "%y-%m-%dT%H:%M:%S.%f%z")
-            postFilter = Posts.objects.filter(timestamp__lte=end, timestamp__gte=start, posted_user=request.user)
-            posts = PostsSerializer(postFilter, context={"request": request}, many=True).data
-            logger.info(f"{request.user.username} fetched Analytics")
-            return Response({'posts': posts}, status=HTTP_200_OK)
+        try:
+            start, end = request.query_params.get('start'), request.query_params.get('end')
+            if not (start and end):
+                return Response(status=HTTP_400_BAD_REQUEST)
+            else:
+                start = datetime.strptime(start, "%y-%m-%dT%H:%M:%S.%f%z")
+                end = datetime.strptime(end, "%y-%m-%dT%H:%M:%S.%f%z")
+                postFilter = Posts.objects.filter(timestamp__lte=end, timestamp__gte=start, posted_user=request.user)
+                data = {}
+                for post in postFilter:
+                    date = post.timestamp.day
+                    data[date] = 1
+                return Response(data=data, status=HTTP_200_OK)
+        except Exception as e:
+            logger.critical(e)
+            return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
             
 
 class FeedbackAPIView(APIView):
@@ -425,4 +431,5 @@ class ShareImageAPIView(APIView):
             return Response(PostsSerializer(postFilter.get(), context={"request": request}).data, status=HTTP_200_OK)
         else:
             return Response(status=HTTP_404_NOT_FOUND)
+
         
