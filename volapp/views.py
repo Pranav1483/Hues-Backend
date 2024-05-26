@@ -252,39 +252,44 @@ class LikeAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request):
-        postId, emoji = request.data.get("post"), request.data.get("emoji")
-        if emoji not in emojis:
-            return Response(status=HTTP_400_BAD_REQUEST)
-        user: User = request.user
-        if postId and emoji:
-            post_filter = Posts.objects.filter(id=postId)
-            if post_filter.exists():
-                post = post_filter.get()
-                likes_filter = Likes.objects.filter(user=user, post=post)
-                if likes_filter.exists():
-                    like = likes_filter.get()
-                    if emoji == like.emoji:
-                        post.reactions[like.emoji] -= 1
-                        like.emoji = ""
-                        like.save()
-                        post.save()
+        try:
+            postId, emoji = request.data.get("post"), request.data.get("emoji")
+            if emoji not in emojis:
+                return Response(status=HTTP_400_BAD_REQUEST)
+            user: User = request.user
+            if postId and emoji:
+                post_filter = Posts.objects.filter(id=postId)
+                if post_filter.exists():
+                    post = post_filter.get()
+                    likes_filter = Likes.objects.filter(user=user, post=post)
+                    if likes_filter.exists():
+                        like = likes_filter.get()
+                        if emoji == like.emoji:
+                            post.reactions[like.emoji] -= 1
+                            like.emoji = ""
+                            like.save()
+                            post.save()
+                        else:
+                            if like.emoji != "":
+                                post.reactions[like.emoji] -= 1
+                            like.emoji = emoji
+                            post.reactions[emoji] = post.reactions.get(emoji, 0) + 1
+                            like.save()
+                            post.save()
+                        return Response(status=HTTP_204_NO_CONTENT)
                     else:
-                        post.reactions[like.emoji] -= 1
-                        like.emoji = emoji
+                        like = Likes(user=user, post=post, emoji=emoji)
                         post.reactions[emoji] = post.reactions.get(emoji, 0) + 1
-                        like.save()
                         post.save()
-                    return Response(status=HTTP_204_NO_CONTENT)
+                        like.save()
+                        return Response(status=HTTP_204_NO_CONTENT)
                 else:
-                    like = Likes(user=user, post=post, emoji=emoji)
-                    post.reactions[emoji] = post.reactions.get(emoji, 0) + 1
-                    post.save()
-                    like.save()
-                    return Response(status=HTTP_204_NO_CONTENT)
+                    return Response(status=HTTP_404_NOT_FOUND)
             else:
-                return Response(status=HTTP_404_NOT_FOUND)
-        else:
-            return Response(status=HTTP_400_BAD_REQUEST)
+                return Response(status=HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.critical(f"Error Liking Post, Reason: {e}")
+            return Response(status=HTTP_500_INTERNAL_SERVER_ERROR)
 
             
 
